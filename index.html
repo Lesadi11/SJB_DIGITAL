@@ -1,0 +1,551 @@
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SJB Digital Archive | Ultra Premium</title>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; overflow-x: hidden; }
+        .font-display { font-family: 'Outfit', sans-serif; }
+        
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        
+        @keyframes blob {
+            0% { transform: translate(0px, 0px) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+            100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .section-card-hover {
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .section-card-hover:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 25px 50px -12px rgba(79, 70, 229, 0.15);
+        }
+
+        /* Fade-in transitions for views */
+        .view-transition {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // Configuration for archival categories
+        const SECTIONS = [
+            { id: 'management', title: 'Management', icon: 'Shield', color: 'from-blue-500 to-indigo-600', desc: 'Administrative & leadership records' },
+            { id: 'resources', title: 'Resources', icon: 'Users', color: 'from-indigo-500 to-purple-600', desc: 'Faculty & staffing documentation' },
+            { id: 'curriculum', title: 'Curriculum', icon: 'BookOpen', color: 'from-emerald-500 to-teal-600', desc: 'Syllabus & academic standards' },
+            { id: 'cocurricular', title: 'Activities', icon: 'Compass', color: 'from-orange-500 to-red-600', desc: 'Sports, clubs & event logs' },
+            { id: 'achievement', title: 'Honors', icon: 'Trophy', color: 'from-yellow-400 to-amber-600', desc: 'Awards & student excellence' },
+            { id: 'welfare', title: 'Welfare', icon: 'Heart', color: 'from-rose-500 to-pink-600', desc: 'Student support & health' },
+            { id: 'community', title: 'Community', icon: 'Globe', color: 'from-cyan-500 to-blue-600', desc: 'Alumni & public relations' },
+            { id: 'development', title: 'Growth', icon: 'Zap', color: 'from-violet-500 to-fuchsia-600', desc: 'Future projects & infrastructure' }
+        ];
+
+        // Lucide Icon Wrapper Component
+        const LucideIcon = ({ name, size = 20, className = "" }) => {
+            const IconComponent = name;
+            useEffect(() => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            }, [name]);
+            return <i data-lucide={name.toLowerCase()} className={className} style={{width: size, height: size}}></i>;
+        };
+
+        const App = () => {
+            const [view, setView] = useState('home');
+            const [user, setUser] = useState(null);
+            const [activeSec, setActiveSec] = useState(null);
+            const [isLoginOpen, setIsLoginOpen] = useState(false);
+            const [selectedImg, setSelectedImg] = useState(null);
+            const [mobileMenu, setMobileMenu] = useState(false);
+
+            // Data Persistence
+            const [data, setData] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('sjb_ultra_v2');
+                    return saved ? JSON.parse(saved) : {};
+                } catch (e) { return {}; }
+            });
+
+            useEffect(() => {
+                localStorage.setItem('sjb_ultra_v2', JSON.stringify(data));
+            }, [data]);
+
+            const handleFileUpload = (e) => {
+                const files = Array.from(e.target.files);
+                files.forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const newFile = {
+                            id: Math.random().toString(36).substr(2, 9),
+                            name: file.name,
+                            time: new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }),
+                            type: file.type,
+                            content: event.target.result,
+                            size: (file.size / 1024).toFixed(1) + ' KB'
+                        };
+                        setData(prev => ({ 
+                            ...prev, 
+                            [activeSec.id]: [newFile, ...(prev[activeSec.id] || [])] 
+                        }));
+                    };
+                    reader.readAsDataURL(file);
+                });
+                e.target.value = '';
+            };
+
+            const Background = () => (
+                <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+                    <div className="absolute top-0 left-0 w-full h-full bg-[#fcfdff]"></div>
+                    <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-200/40 blur-[120px] rounded-full animate-blob"></div>
+                    <div className="absolute top-[20%] right-[-5%] w-[400px] h-[400px] bg-purple-200/30 blur-[120px] rounded-full animate-blob animation-delay-2000"></div>
+                    <div className="absolute bottom-[-10%] left-[10%] w-[600px] h-[600px] bg-blue-100/40 blur-[120px] rounded-full animate-blob animation-delay-4000"></div>
+                    <div className="absolute inset-0 opacity-[0.02]" style={{ backgroundImage: `radial-gradient(#4f46e5 1px, transparent 1px)`, backgroundSize: '40px 40px' }}></div>
+                </div>
+            );
+
+            const Sidebar = () => (
+                <aside className={`fixed top-0 left-0 h-full glass border-r border-white/40 w-80 z-50 transition-all duration-700 ease-in-out lg:translate-x-0 ${mobileMenu ? 'translate-x-0' : '-translate-x-full'} shadow-2xl lg:shadow-none`}>
+                    <div className="p-10 h-full flex flex-col">
+                        <div className="flex items-center gap-4 mb-16 group cursor-pointer" onClick={() => { setView('home'); setMobileMenu(false); }}>
+                            <div className="w-12 h-12 bg-gradient-to-tr from-indigo-600 to-indigo-800 rounded-2xl flex items-center justify-center text-white shadow-xl group-hover:rotate-12 transition-all duration-500">
+                                <LucideIcon name="Layers" size={24} />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="font-extrabold text-2xl tracking-tighter text-slate-900 leading-none">SJB<span className="text-indigo-600">Archive</span></span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Digital Heritage</span>
+                            </div>
+                        </div>
+
+                        <nav className="flex-1 space-y-3">
+                            {[
+                                { id: 'home', icon: 'Home', label: 'Dashboard' },
+                                { id: 'sections', icon: 'Database', label: 'Digital Vault' },
+                                { id: 'gallery', icon: 'Image', label: 'Media Gallery' }
+                            ].map((item) => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => { setView(item.id); setMobileMenu(false); }}
+                                    className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all duration-500 ${
+                                        view === item.id 
+                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 translate-x-2' 
+                                        : 'text-slate-500 hover:bg-white hover:text-indigo-600 hover:shadow-sm'
+                                    }`}
+                                >
+                                    <LucideIcon name={item.icon} size={20} />
+                                    <span>{item.label}</span>
+                                </button>
+                            ))}
+                        </nav>
+
+                        <div className="mt-auto pt-8 border-t border-slate-200/50">
+                            {user ? (
+                                <div className="bg-indigo-50/50 p-5 rounded-3xl border border-indigo-100/50">
+                                    <div className="flex items-center gap-3 mb-5">
+                                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                                            {user.role[0]}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-black text-slate-900 leading-none mb-1">{user.role}</p>
+                                            <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Administrator</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setUser(null)}
+                                        className="w-full py-3 bg-white border border-slate-200 rounded-xl text-rose-500 text-xs font-black hover:bg-rose-50 hover:border-rose-200 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <LucideIcon name="LogOut" size={14} /> Sign Out
+                                    </button>
+                                </div>
+                            ) : (
+                                <button 
+                                    onClick={() => setIsLoginOpen(true)}
+                                    className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-sm shadow-xl hover:bg-indigo-600 transition-all active:scale-95 flex items-center justify-center gap-3"
+                                >
+                                    <LucideIcon name="Shield" size={18} /> Access Vault
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </aside>
+            );
+
+            const HomeView = () => (
+                <div className="min-h-[85vh] flex flex-col items-center justify-center text-center px-4 view-transition">
+                    <div className="inline-flex items-center gap-2 px-6 py-2 bg-white/80 backdrop-blur-md rounded-full text-indigo-600 mb-10 border border-indigo-100/50 shadow-sm animate-float">
+                        <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.3em]">Official Institutional Memory</span>
+                    </div>
+                    <h1 className="text-6xl lg:text-9xl font-display font-extrabold text-slate-900 tracking-tight leading-[0.85] mb-10">
+                        Preserving <br/>
+                        <span className="bg-gradient-to-r from-indigo-600 via-indigo-400 to-purple-500 bg-clip-text text-transparent">Heritage.</span>
+                    </h1>
+                    <p className="max-w-xl text-slate-500 text-lg md:text-xl font-medium mb-14 leading-relaxed opacity-80">
+                        Step into the digital vault of St. Joseph's College Kegalle. A seamless portal for historic preservation and administrative excellence.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-6">
+                        <button 
+                            onClick={() => setView('sections')}
+                            className="px-12 py-6 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-2xl shadow-indigo-200 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-4"
+                        >
+                            Explore Archives <LucideIcon name="ArrowRight" size={24} />
+                        </button>
+                        <button 
+                            onClick={() => setView('gallery')}
+                            className="px-12 py-6 glass text-slate-700 rounded-2xl font-black text-lg hover:bg-white transition-all border border-slate-200"
+                        >
+                            View Gallery
+                        </button>
+                    </div>
+                </div>
+            );
+
+            const SectionsView = () => (
+                <div className="py-12 view-transition">
+                    <div className="mb-16">
+                        <h2 className="text-5xl font-display font-extrabold text-slate-900 tracking-tight mb-4">Digital Repository</h2>
+                        <div className="h-1 w-20 bg-indigo-600 rounded-full mb-4"></div>
+                        <p className="text-slate-500 font-medium text-lg">Browse curated departments and historical archives.</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+                        {SECTIONS.map((sec, i) => {
+                            const count = (data[sec.id] || []).length;
+                            return (
+                                <div 
+                                    key={sec.id}
+                                    onClick={() => { setActiveSec(sec); setView('detail'); }}
+                                    className="group relative glass p-10 rounded-[3rem] cursor-pointer section-card-hover border border-white/60 shadow-xl shadow-slate-200/50"
+                                    style={{ animationDelay: `${i * 80}ms` }}
+                                >
+                                    <div className={`w-20 h-20 rounded-[2rem] bg-gradient-to-br ${sec.color} flex items-center justify-center text-white mb-10 shadow-xl group-hover:rotate-12 transition-all duration-500`}>
+                                        <LucideIcon name={sec.icon} size={32} />
+                                    </div>
+                                    <h3 className="text-2xl font-extrabold text-slate-900 mb-3 tracking-tight">{sec.title}</h3>
+                                    <p className="text-slate-400 text-sm mb-10 leading-relaxed font-medium">{sec.desc}</p>
+                                    
+                                    <div className="flex items-center justify-between mt-auto">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-1">Records</span>
+                                            <span className="text-2xl font-display font-extrabold text-slate-900">{count}</span>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
+                                            <LucideIcon name="ArrowRight" size={20} />
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+
+            const DetailView = () => {
+                const files = data[activeSec?.id] || [];
+                const isStaff = user?.role === 'Staff';
+
+                return (
+                    <div className="py-12 view-transition">
+                        <button 
+                            onClick={() => setView('sections')}
+                            className="flex items-center gap-3 text-slate-400 hover:text-indigo-600 font-black mb-12 transition-all group"
+                        >
+                            <LucideIcon name="ArrowLeft" size={20} className="group-hover:-translate-x-1 transition-transform" />
+                            <span className="uppercase tracking-widest text-xs">Back to Vault</span>
+                        </button>
+
+                        <div className="glass rounded-[4rem] p-10 lg:p-16 border border-white/80 shadow-2xl relative overflow-hidden">
+                            <div className={`absolute top-0 right-0 w-96 h-96 bg-gradient-to-br ${activeSec?.color} opacity-5 blur-[100px] -mr-32 -mt-32`}></div>
+                            
+                            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-10 mb-20 relative z-10">
+                                <div className="flex items-center gap-8">
+                                    <div className={`w-24 h-24 rounded-[2.5rem] bg-gradient-to-br ${activeSec?.color} flex items-center justify-center text-white shadow-2xl animate-float`}>
+                                        <LucideIcon name={activeSec?.icon} size={40} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-5xl font-display font-extrabold text-slate-900 tracking-tight mb-3">{activeSec?.title}</h2>
+                                        <p className="text-slate-500 font-bold text-lg opacity-60">Internal Digital Archive</p>
+                                    </div>
+                                </div>
+
+                                {isStaff && (
+                                    <label className="group flex items-center gap-4 px-10 py-6 bg-slate-900 text-white rounded-3xl font-black cursor-pointer hover:bg-indigo-600 hover:shadow-2xl hover:shadow-indigo-200 transition-all active:scale-95">
+                                        <LucideIcon name="UploadCloud" size={24} className="group-hover:bounce" />
+                                        <span className="text-lg">Add Record</span>
+                                        <input type="file" className="hidden" multiple onChange={handleFileUpload} />
+                                    </label>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-6 relative z-10">
+                                {files.length === 0 ? (
+                                    <div className="py-32 text-center border-4 border-dashed border-indigo-50 rounded-[3rem] bg-indigo-50/20">
+                                        <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mx-auto mb-8 text-indigo-100 shadow-inner">
+                                            <LucideIcon name="FileText" size={48} />
+                                        </div>
+                                        <p className="text-slate-400 font-extrabold text-xl">Vault is currently empty</p>
+                                    </div>
+                                ) : (
+                                    files.map((file, idx) => (
+                                        <div 
+                                            key={file.id}
+                                            className="group flex flex-col md:flex-row items-center justify-between p-6 bg-white/50 hover:bg-white rounded-[2.5rem] border border-transparent hover:border-indigo-100 transition-all duration-500 shadow-sm hover:shadow-xl"
+                                        >
+                                            <div className="flex items-center gap-8 w-full">
+                                                {file.type.startsWith('image/') ? (
+                                                    <div className="relative group/img overflow-hidden w-24 h-24 rounded-3xl shadow-lg cursor-pointer flex-shrink-0" onClick={() => setSelectedImg(file.content)}>
+                                                        <img src={file.content} alt="" className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-700" />
+                                                        <div className="absolute inset-0 bg-indigo-600/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white transition-all duration-300">
+                                                            <LucideIcon name="Maximize2" size={24} />
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-24 h-24 rounded-3xl bg-indigo-50/50 flex items-center justify-center text-indigo-400 flex-shrink-0 border border-indigo-100/50">
+                                                        <LucideIcon name="FileText" size={36} />
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className="font-extrabold text-xl text-slate-900 truncate mb-2">{file.name}</h4>
+                                                    <div className="flex flex-wrap items-center gap-4">
+                                                        <div className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-full">
+                                                            <LucideIcon name="Calendar" size={12} className="text-slate-400" />
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{file.time}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1 rounded-full">
+                                                            <LucideIcon name="HardDrive" size={12} className="text-indigo-400" />
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">{file.size}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex items-center gap-3 mt-6 md:mt-0">
+                                                <button 
+                                                    onClick={() => file.type.startsWith('image/') ? setSelectedImg(file.content) : window.open(file.content)}
+                                                    className="w-14 h-14 flex items-center justify-center rounded-2xl bg-white border border-slate-100 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-xl transition-all duration-300"
+                                                >
+                                                    <LucideIcon name="Eye" size={22} />
+                                                </button>
+                                                {isStaff && (
+                                                    <button 
+                                                        onClick={() => setData(prev => ({ ...prev, [activeSec.id]: files.filter(f => f.id !== file.id) }))}
+                                                        className="w-14 h-14 flex items-center justify-center rounded-2xl bg-white border border-slate-100 text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:shadow-xl transition-all duration-300"
+                                                    >
+                                                        <LucideIcon name="Trash2" size={22} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const GalleryView = () => {
+                const allImages = useMemo(() => {
+                    let imgs = [];
+                    Object.values(data).forEach(arr => {
+                        arr.forEach(f => { if (f.type.startsWith('image/')) imgs.push(f); });
+                    });
+                    return imgs;
+                }, [data]);
+
+                return (
+                    <div className="py-12 view-transition">
+                        <div className="mb-16">
+                            <h2 className="text-5xl font-display font-extrabold text-slate-900 tracking-tight mb-4">Visual Archives</h2>
+                            <div className="h-1 w-20 bg-indigo-600 rounded-full mb-4"></div>
+                            <p className="text-slate-500 font-medium text-lg">Historic and modern campus media collection.</p>
+                        </div>
+
+                        {allImages.length === 0 ? (
+                            <div className="py-40 text-center glass rounded-[4rem] border border-white/40">
+                                <LucideIcon name="Image" size={64} className="mx-auto text-indigo-100 mb-8" />
+                                <p className="text-slate-400 font-extrabold text-xl">No media found in archives</p>
+                            </div>
+                        ) : (
+                            <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-8 space-y-8">
+                                {allImages.map((img, i) => (
+                                    <div 
+                                        key={img.id} 
+                                        onClick={() => setSelectedImg(img.content)}
+                                        className="relative group rounded-[2.5rem] overflow-hidden cursor-pointer glass break-inside-avoid shadow-lg hover:shadow-2xl transition-all duration-700 hover:-translate-y-3"
+                                        style={{ animationDelay: `${i * 60}ms` }}
+                                    >
+                                        <img src={img.content} className="w-full h-auto object-cover" alt="" />
+                                        <div className="absolute inset-0 bg-indigo-900/40 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center backdrop-blur-sm">
+                                            <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl flex items-center justify-center text-white border border-white/40 scale-50 group-hover:scale-100 transition-all duration-500">
+                                                <LucideIcon name="Search" size={28} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen text-slate-900 selection:bg-indigo-100 selection:text-indigo-600">
+                    <Background />
+                    <Sidebar />
+
+                    {/* Mobile Navbar */}
+                    <header className="lg:hidden fixed top-0 left-0 w-full glass z-[60] px-6 py-4 flex items-center justify-between border-b border-white/40">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg">
+                                <LucideIcon name="Layers" size={20} />
+                            </div>
+                            <span className="font-extrabold text-xl tracking-tighter">SJB Archive</span>
+                        </div>
+                        <button 
+                            onClick={() => setMobileMenu(!mobileMenu)}
+                            className="w-12 h-12 bg-white/50 border border-slate-200 rounded-2xl flex items-center justify-center text-slate-600 active:scale-90 transition-all"
+                        >
+                            <LucideIcon name={mobileMenu ? "X" : "Menu"} size={24} />
+                        </button>
+                    </header>
+
+                    <main className={`lg:ml-80 min-h-screen p-8 lg:p-20 transition-all duration-700 ${mobileMenu ? 'blur-lg scale-[0.98]' : ''}`}>
+                        <div className="max-w-7xl mx-auto pt-16 lg:pt-0">
+                            {view === 'home' && <HomeView />}
+                            {view === 'sections' && <SectionsView />}
+                            {view === 'detail' && <DetailView />}
+                            {view === 'gallery' && <GalleryView />}
+                        </div>
+                    </main>
+
+                    {/* Security Portal (Auth Modal) */}
+                    {isLoginOpen && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 view-transition">
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xl" onClick={() => setIsLoginOpen(false)}></div>
+                            <div className="glass rounded-[4rem] w-full max-w-xl p-12 lg:p-20 relative shadow-2xl border border-white/40 animate-in zoom-in-95 duration-500">
+                                <button 
+                                    onClick={() => setIsLoginOpen(false)}
+                                    className="absolute top-12 right-12 text-slate-300 hover:text-slate-900 transition-all"
+                                >
+                                    <LucideIcon name="X" size={32} />
+                                </button>
+                                
+                                <div className="text-center mb-16">
+                                    <div className="w-24 h-24 bg-indigo-600/10 rounded-[2.5rem] flex items-center justify-center text-indigo-600 mx-auto mb-8 shadow-inner animate-float">
+                                        <LucideIcon name="ShieldCheck" size={48} />
+                                    </div>
+                                    <h3 className="text-4xl font-display font-extrabold text-slate-900 mb-4 tracking-tight">Security Portal</h3>
+                                    <p className="text-slate-400 font-bold text-lg opacity-60">Identity verification required</p>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <button 
+                                        onClick={() => { setUser({ role: 'Staff' }); setIsLoginOpen(false); }}
+                                        className="w-full flex items-center justify-between p-8 bg-slate-900 text-white rounded-[2.5rem] font-black hover:bg-indigo-600 hover:shadow-2xl hover:shadow-indigo-200 transition-all group"
+                                    >
+                                        <div className="flex items-center gap-6">
+                                            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-indigo-400">
+                                                <LucideIcon name="Key" size={24} />
+                                            </div>
+                                            <div className="text-left leading-tight">
+                                                <p className="text-xl">Staff Portal</p>
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-1">Full Administrative Access</p>
+                                            </div>
+                                        </div>
+                                        <LucideIcon name="ArrowRight" size={24} className="group-hover:translate-x-2 transition-transform" />
+                                    </button>
+
+                                    <button 
+                                        onClick={() => { setUser({ role: 'Guest' }); setIsLoginOpen(false); }}
+                                        className="w-full flex items-center justify-between p-8 bg-white border border-slate-200 rounded-[2.5rem] font-black hover:border-indigo-600 hover:shadow-xl transition-all group"
+                                    >
+                                        <div className="flex items-center gap-6">
+                                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                                <LucideIcon name="Eye" size={24} />
+                                            </div>
+                                            <div className="text-left leading-tight">
+                                                <p className="text-xl text-slate-900">Guest Access</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Public Document Preview</p>
+                                            </div>
+                                        </div>
+                                        <LucideIcon name="ArrowRight" size={24} className="group-hover:translate-x-2 transition-transform" />
+                                    </button>
+                                </div>
+                                
+                                <p className="mt-16 text-center text-[10px] font-black text-slate-300 uppercase tracking-[0.4em]">
+                                    Standard SJB Encryption Protocol
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Lightbox */}
+                    {selectedImg && (
+                        <div 
+                            className="fixed inset-0 z-[200] bg-slate-950/98 backdrop-blur-2xl flex items-center justify-center p-10 animate-in fade-in duration-500"
+                            onClick={() => setSelectedImg(null)}
+                        >
+                            <button className="absolute top-10 right-10 text-white/40 hover:text-white transition-all">
+                                <LucideIcon name="X" size={48} />
+                            </button>
+                            <img 
+                                src={selectedImg} 
+                                className="max-w-full max-h-full rounded-3xl shadow-2xl animate-in zoom-in-95 duration-500 border border-white/10" 
+                                alt="Enlarged"
+                            />
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
